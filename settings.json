@@ -1,0 +1,31 @@
+{
+  "bot-account": {
+    "username": "",
+    "password": "",
+    "type": "offline"
+  },
+  "server": {
+    "ip": "",
+    "port": "",
+    "version": "1.21.4"
+  },
+  "position": {
+    "enabled": false,
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "utils": {
+    "auto-auth": {
+      "enabled": false,
+      "password": ""
+    },
+    "anti-afk": {
+      "enabled": true,
+      "sneak": true
+    },
+    "chat-log": true,
+    "auto-reconnect": true,
+    "auto-reconnect-delay": 5000
+  }
+}

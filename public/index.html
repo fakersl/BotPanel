@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel do Bot</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .loader {
+      border: 4px solid rgba(255, 255, 255, 0.2);
+      border-left-color: #3498db;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      display: none;
+      margin: auto;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-white flex justify-center items-center h-screen">
+
+  <div class="w-full max-w-lg p-8 bg-gray-800 rounded-xl shadow-lg">
+    <h1 class="text-3xl font-semibold text-center mb-6">Configuração do Bot</h1>
+
+    <form id="configForm" class="space-y-4">
+      <div>
+        <label for="username" class="block text-sm font-medium">Nome do Bot:</label>
+        <input type="text" id="username" class="w-full p-3 mt-1 rounded-md bg-gray-700 text-white">
+      </div>
+
+      <div>
+        <label for="serverIP" class="block text-sm font-medium">IP do Servidor:</label>
+        <input type="text" id="serverIP" class="w-full p-3 mt-1 rounded-md bg-gray-700 text-white">
+      </div>
+
+      <div>
+        <label for="serverPort" class="block text-sm font-medium">Porta do Servidor:</label>
+        <input type="number" id="serverPort" class="w-full p-3 mt-1 rounded-md bg-gray-700 text-white">
+      </div>
+
+      <div class="loader" id="loader"></div>
+    </form>
+
+    <div class="flex gap-2">
+      <button id="setNomeBot"
+        class="w-full py-3 mt-4 rounded-md bg-blue-600 hover:bg-blue-800 transition text-white font-semibold">Definir Nome Bot</button>
+      <button id="startBot"
+        class="w-full py-3 mt-4 rounded-md bg-blue-600 hover:bg-blue-800 transition text-white font-semibold">Iniciar
+        Bot</button>
+      <button id="stopBot"
+        class="w-full py-3 mt-4 rounded-md bg-red-600 hover:bg-red-800 text-white transition font-semibold">Parar
+        Bot</button>
+    </div>
+
+    <div class="mt-6">
+      <h2 class="text-xl font-semibold">Logs</h2>
+      <div id="logContainer" class="mt-4 text-sm max-h-64 overflow-y-auto bg-gray-700 p-3 rounded-md"></div>
+    </div>
+  </div>
+
+  <!-- Toasts (Popups) -->
+  <div id="toastContainer" class="fixed top-4 right-4 space-y-4 z-50">
+    <div id="botStartedToast"
+      class="hidden bg-green-600 text-white p-4 rounded-lg shadow-lg max-w-xs transition-all duration-300 opacity-0">
+      Bot iniciado!
+    </div>
+    <div id="botStoppedToast"
+      class="hidden bg-red-600 text-white p-4 rounded-lg shadow-lg max-w-xs transition-all duration-300 opacity-0">
+      Bot parado!
+    </div>
+    <div id="botErrorToast"
+      class="hidden bg-yellow-600 text-white p-4 rounded-lg shadow-lg max-w-xs transition-all duration-300 opacity-0">
+      Ocorreu um erro com o bot.
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+
+    document.getElementById('setNomeBot').addEventListener('click', () => {
+      const nomeBot = document.getElementById('username').value;
+      if (!nomeBot) {
+        alert("Nome do bot é obrigatório!");
+        return;
+      }
+      socket.emit('setNomeBot', nomeBot);
+    });
+
+    document.getElementById('startBot').addEventListener('click', () => {
+      socket.emit('startBot');
+    });
+
+    document.getElementById('stopBot').addEventListener('click', () => {
+      socket.emit('stopBot');
+    });
+
+    socket.on('log', (message) => {
+      const logContainer = document.getElementById('logContainer');
+      const newLog = document.createElement('p');
+      newLog.textContent = message;
+      logContainer.appendChild(newLog);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    });
+
+    socket.on('botStarted', () => {
+      document.getElementById('botStartedToast').classList.remove('hidden', 'opacity-0');
+      document.getElementById('botStartedToast').classList.add('opacity-100');
+      setTimeout(() => {
+        document.getElementById('botStartedToast').classList.add('opacity-0');
+        setTimeout(() => {
+          document.getElementById('botStartedToast').classList.add('hidden');
+        }, 500);
+      }, 3000);
+    });
+
+    socket.on('botStopped', () => {
+      document.getElementById('botStoppedToast').classList.remove('hidden', 'opacity-0');
+      document.getElementById('botStoppedToast').classList.add('opacity-100');
+      setTimeout(() => {
+        document.getElementById('botStoppedToast').classList.add('opacity-0');
+        setTimeout(() => {
+          document.getElementById('botStoppedToast').classList.add('hidden');
+        }, 500);
+      }, 3000);
+    });
+
+    socket.on('botError', () => {
+      document.getElementById('botErrorToast').classList.remove('hidden', 'opacity-0');
+      document.getElementById('botErrorToast').classList.add('opacity-100');
+      setTimeout(() => {
+        document.getElementById('botErrorToast').classList.add('opacity-0');
+        setTimeout(() => {
+          document.getElementById('botErrorToast').classList.add('hidden');
+        }, 500);
+      }, 3000);
+    });
+  </script>
+
+</body>
+
+</html>
