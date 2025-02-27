@@ -2,26 +2,42 @@ const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
 const mineflayer = require("mineflayer");
+const fs = require("fs");
+const path = require("path");
 const {
   Movements,
   pathfinder,
   goals: { GoalBlock },
 } = require("mineflayer-pathfinder");
-const fs = require("fs");
-const config = require("./settings.json");
+
+const configPath = path.join(__dirname, "settings.json");
 
 const app = express();
 const server = http.createServer(app);
-const io = require("socket.io")(server);
+const io = socketIo(server);
 
 let botInstance = null;
-let nomeBot = null; // Variável para armazenar o nome do bot
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
 
-// Middleware para servir arquivos estáticos
+// Middleware
 app.use(express.static("public"));
 app.use(express.json());
 
-// Rota para obter as configurações atuais
+function loadConfig() {
+  return JSON.parse(fs.readFileSync(configPath, "utf-8"));
+}
+
+function saveConfig(newConfig) {
+  fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
+}
+
+// Carregar config e garantir que o nome comece vazio
+let config = loadConfig();
+config["bot-account"].username = "";
+saveConfig(config);
+
+// Rota para obter configurações
 app.get("/getConfig", (req, res) => {
   res.json({
     username: config["bot-account"].username,
@@ -30,59 +46,55 @@ app.get("/getConfig", (req, res) => {
   });
 });
 
-// Rota para salvar as configurações
+// Rota para salvar configurações
 app.post("/saveConfig", (req, res) => {
   const { username, serverIP, serverPort } = req.body;
-
   console.log(`Salvando nome do bot: ${username}`);
 
-  // Atualizar configurações
   config["bot-account"].username = username;
   config.server.ip = serverIP;
   config.server.port = serverPort;
 
-  // Salvar no arquivo settings.json
-  fs.writeFile("./settings.json", JSON.stringify(config, null, 2), (err) => {
-    if (err) {
-      console.error("Erro ao salvar configurações:", err);
-      return res
-        .status(500)
-        .json({ message: "Erro ao salvar as configurações" });
-    }
+  saveConfig(config);
 
-    io.emit("configUpdated", { username, serverIP, serverPort });
+  io.emit("configUpdated", { username, serverIP, serverPort });
 
-    // Se o bot estiver rodando, reiniciar com o novo nome
-    if (botInstance) {
-      botInstance.quit();
-      botInstance = null;
-      createBot(username);
-    }
+  if (botInstance) {
+    botInstance.quit();
+    botInstance = null;
+    createBot(username);
+  }
 
-    res.json({ message: "Configurações salvas com sucesso!" });
-  });
+  res.json({ message: "Configurações salvas com sucesso!" });
 });
 
-// Função para criar o bot
+// Criar o bot
 function createBot(username) {
   if (botInstance) return;
 
+  config = loadConfig();
+  config["bot-account"].username = username; // Salvar nome temporário
+  saveConfig(config);
+
   botInstance = mineflayer.createBot({
     username,
-    auth: "offline", // Modo offline
+    auth: "offline",
     host: config.server.ip,
     port: config.server.port,
     version: config.server.version,
   });
 
   botInstance.loadPlugin(pathfinder);
-  const mcData = require("minecraft-data")(botInstance.version);
-  const defaultMove = new Movements(botInstance, mcData);
 
   botInstance.once("spawn", () => {
-    console.log(`[AfkBot] Bot entrou no servidor com o nome: ${username}`);
-    io.emit("log", `[AfkBot] Bot entrou no servidor com o nome: ${username}`);
-    io.emit("botStarted"); // Enviar evento de bot iniciado para o frontend
+    console.log(`[AfkBot] Bot conectado como: ${username}`);
+    io.emit("log", `[AfkBot] Bot conectado como: ${username}`);
+    io.emit("botStarted");
+
+    reconnectAttempts = 0;
+
+    const mcData = require("minecraft-data")(botInstance.version);
+    const defaultMove = new Movements(botInstance, mcData);
   });
 
   botInstance.on("goal_reached", () => {
@@ -97,26 +109,44 @@ function createBot(username) {
     io.emit("log", `[AfkBot] Bot morreu e foi respawnado em ${position}`);
   });
 
+  botInstance.on("kicked", (reason) => {
+    console.log(`[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
+    io.emit("log", `[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
+    resetBotName(); // Resetar nome quando for expulso
+  });
+
   botInstance.on("end", () => {
-    console.log("[AfkBot] Conexão encerrada, tentando reconectar...");
-    io.emit("log", "[AfkBot] Conexão encerrada, tentando reconectar...");
+    console.log("[AfkBot] Conexão perdida");
+    io.emit("log", "[AfkBot] Conexão perdida");
+    resetBotName(); // Resetar nome quando cair
+
     botInstance = null;
-    setTimeout(() => createBot(username), config.utils["auto-reconnect-delay"]);
+    if (
+      config.utils["auto-reconnect"] &&
+      reconnectAttempts < maxReconnectAttempts
+    ) {
+      reconnectAttempts++;
+      setTimeout(() => createBot(username), config.utils["auto-reconnect-delay"]);
+    }
   });
 
   botInstance.on("error", (err) => {
     console.log(`[ERROR] ${err.message}`);
     io.emit("log", `[ERROR] ${err.message}`);
-    io.emit("botError"); // Enviar evento de erro para o frontend
-  });
-
-  botInstance.on("kicked", (reason) => {
-    console.log(`[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
-    io.emit("log", `[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
+    io.emit("botError");
+    resetBotName(); // Resetar nome quando ocorrer erro
   });
 }
 
-// Iniciar ou parar o bot dependendo do estado atual
+// Resetar nome do bot no settings.json
+function resetBotName() {
+  config = loadConfig();
+  config["bot-account"].username = "";
+  saveConfig(config);
+  io.emit("nomeBotReset"); // Avisar frontend que o nome foi resetado
+}
+
+// WebSocket
 io.on("connection", (socket) => {
   console.log("Cliente conectado");
 
@@ -125,19 +155,21 @@ io.on("connection", (socket) => {
       return socket.emit("erro", "Nome do bot é obrigatório!");
     }
 
-    nomeBot = nome;
-    console.log(`Nome do bot definido para: ${nomeBot}`);
-    socket.emit("nomeBotSet", nomeBot); // Enviar confirmação para o frontend
+    config["bot-account"].username = nome;
+    saveConfig(config);
+
+    console.log(`Nome do bot definido para: ${nome}`);
+    socket.emit("nomeBotSet", nome);
   });
 
   socket.on("startBot", () => {
-    if (!nomeBot) {
+    if (!config["bot-account"].username) {
       return socket.emit("erro", "Nome do bot não foi definido!");
     }
 
     if (!botInstance) {
-      createBot(nomeBot);
-      socket.emit("log", `[AfkBot] Bot iniciado com o nome: ${nomeBot}`);
+      createBot(config["bot-account"].username);
+      socket.emit("log", `[AfkBot] Bot iniciado com o nome: ${config["bot-account"].username}`);
     }
   });
 
@@ -146,7 +178,8 @@ io.on("connection", (socket) => {
       botInstance.quit();
       botInstance = null;
       socket.emit("log", "[AfkBot] Bot parado!");
-      io.emit("botStopped"); // Enviar evento de bot parado para o frontend
+      io.emit("botStopped");
+      resetBotName(); // Resetar nome ao parar o bot
     }
   });
 
@@ -165,6 +198,7 @@ app.post("/stop-bot", (req, res) => {
     botInstance.quit();
     botInstance = null;
     console.log("Bot parado.");
+    resetBotName(); // Resetar nome ao parar via API
     res.json({ success: true, message: "Bot parado com sucesso." });
   } else {
     res.json({ success: false, message: "Nenhum bot rodando." });
