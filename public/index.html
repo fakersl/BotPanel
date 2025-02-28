@@ -80,6 +80,7 @@
     const socket = io();
     const toastContainer = document.getElementById("toastContainer");
 
+    // Função para mostrar Toasts
     function showToast(message, color) {
       const toast = document.createElement("div");
       toast.className = `bg-${color}-600 text-white p-4 rounded-lg shadow-lg max-w-xs opacity-100 transition-all duration-300`;
@@ -91,29 +92,61 @@
       }, 3000);
     }
 
+    // Função para carregar as configurações e preencher o formulário
+    function loadConfig() {
+      fetch('/getConfig')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('username').value = data.username || '';
+          document.getElementById('serverIP').value = data.serverIP || '';
+          document.getElementById('serverPort').value = data.serverPort || 45636; // Porta será preenchida com 45636 por padrão
+        });
+    }
+
+    // Carregar as configurações ao carregar a página
+    window.onload = loadConfig;
+
+    // Definir Nome do Bot
     document.getElementById("setNomeBot").addEventListener("click", () => {
       const nomeBot = document.getElementById("username").value;
-      if (!nomeBot) {
-        showToast("Nome do bot é obrigatório!", "yellow");
+      const serverIP = document.getElementById("serverIP").value;
+      const serverPort = document.getElementById("serverPort").value;
+
+      if (!nomeBot || !serverIP) {
+        showToast("Todos os campos são obrigatórios!", "yellow");
         return;
       }
-      socket.emit("setNomeBot", nomeBot);
+
+      // Enviar dados para o servidor
+      socket.emit("setNomeBot", { nomeBot, serverIP, serverPort });
     });
 
+    // Iniciar o Bot
     document.getElementById("startBot").addEventListener("click", () => {
       socket.emit("startBot");
     });
 
+    // Parar o Bot
     document.getElementById("stopBot").addEventListener("click", () => {
       socket.emit("stopBot");
     });
 
+    // Exibir logs
     socket.on("log", (message) => {
       const logContainer = document.getElementById("logContainer");
       const newLog = document.createElement("p");
       newLog.textContent = message;
       logContainer.appendChild(newLog);
       logContainer.scrollTop = logContainer.scrollHeight;
+    });
+
+    // Exibir mensagens de sucesso ou erro
+    socket.on("nomeBotSet", (nomeBot) => {
+      showToast(`Nome do bot definido para: ${nomeBot}`, "green");
+    });
+
+    socket.on("erro", (message) => {
+      showToast(message, "red");
     });
 
     socket.on("botStarted", () => showToast("Bot iniciado!", "green"));

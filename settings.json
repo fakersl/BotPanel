@@ -1,12 +1,12 @@
 {
   "bot-account": {
-    "username": "",
+    "username": "fakerzits",
     "password": "",
     "type": "offline"
   },
   "server": {
-    "ip": "",
-    "port": "",
+    "ip": "XxX2308.aternos.me",
+    "port": "45636",
     "version": "1.21.4"
   },
   "position": {

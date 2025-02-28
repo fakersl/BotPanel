@@ -73,15 +73,17 @@ function createBot(username) {
   if (botInstance) return;
 
   config = loadConfig();
+  
   config["bot-account"].username = username; // Salvar nome temporário
   saveConfig(config);
 
   botInstance = mineflayer.createBot({
     username,
     auth: "offline",
-    host: config.server.ip,
-    port: config.server.port,
+    host: config.server.ip, // Usar o IP/domínio do servidor Aternos
+    port: config.server.port, // Usar a porta do servidor Aternos
     version: config.server.version,
+    connectTimeout: 10000, // Timeout de 10 segundos
   });
 
   botInstance.loadPlugin(pathfinder);
@@ -126,7 +128,10 @@ function createBot(username) {
       reconnectAttempts < maxReconnectAttempts
     ) {
       reconnectAttempts++;
-      setTimeout(() => createBot(username), config.utils["auto-reconnect-delay"]);
+      setTimeout(
+        () => createBot(username),
+        config.utils["auto-reconnect-delay"]
+      );
     }
   });
 
@@ -134,6 +139,17 @@ function createBot(username) {
     console.log(`[ERROR] ${err.message}`);
     io.emit("log", `[ERROR] ${err.message}`);
     io.emit("botError");
+
+    if (err.code === "ECONNREFUSED") {
+      console.log(
+        "[ERROR] Conexão recusada. Verifique o IP e a porta do servidor."
+      );
+      io.emit(
+        "log",
+        "[ERROR] Conexão recusada. Verifique o IP e a porta do servidor."
+      );
+    }
+
     resetBotName(); // Resetar nome quando ocorrer erro
   });
 }
@@ -150,26 +166,43 @@ function resetBotName() {
 io.on("connection", (socket) => {
   console.log("Cliente conectado");
 
-  socket.on("setNomeBot", (nome) => {
-    if (!nome) {
-      return socket.emit("erro", "Nome do bot é obrigatório!");
+  socket.on("setNomeBot", (data) => {
+    const { nomeBot, serverIP, serverPort } = data;
+
+    if (!nomeBot || !serverIP || !serverPort) {
+      return socket.emit("erro", "Todos os campos são obrigatórios!");
     }
 
-    config["bot-account"].username = nome;
+    // Carregar configurações atuais
+    const config = loadConfig();
+
+    // Atualizar configurações
+    config["bot-account"].username = nomeBot;
+    config.server.ip = serverIP;
+    config.server.port = serverPort;
+
+    // Salvar configurações atualizadas
     saveConfig(config);
 
-    console.log(`Nome do bot definido para: ${nome}`);
-    socket.emit("nomeBotSet", nome);
+    // Enviar confirmação para o cliente
+    socket.emit("nomeBotSet", nomeBot);
+    socket.emit("log", `[AfkBot] Nome do bot definido para: ${nomeBot}`);
+    showToast("Configurações salvas com sucesso!", "green");
   });
 
   socket.on("startBot", () => {
+    const config = loadConfig();
+
     if (!config["bot-account"].username) {
       return socket.emit("erro", "Nome do bot não foi definido!");
     }
 
     if (!botInstance) {
       createBot(config["bot-account"].username);
-      socket.emit("log", `[AfkBot] Bot iniciado com o nome: ${config["bot-account"].username}`);
+      socket.emit(
+        "log",
+        `[AfkBot] Bot iniciado com o nome: ${config["bot-account"].username}`
+      );
     }
   });
 
