@@ -22,7 +22,7 @@ Esse projeto cria um bot de Minecraft utilizando `mineflayer` para se conectar a
 Primeiro, faça o clone deste repositório para sua máquina local.
 
 ```bash
-git clone https://github.com/seu-usuario/afk-bot.git
+git clone https://github.com/fakersl/BotPanel
 cd afk-bot
 ```
 
