@@ -23,7 +23,7 @@ Primeiro, faça o clone deste repositório para sua máquina local.
 
 ```bash
 git clone https://github.com/fakersl/BotPanel
-cd afk-bot
+cd BotPanel
 ```
 
 ### Passo 2: Instale as dependências
