@@ -18,6 +18,7 @@ const io = socketIo(server);
 
 let botInstance = null;
 let reconnectAttempts = 0;
+let isManuallyStopped = false; // Controla se o bot foi parado manualmente
 const maxReconnectAttempts = 5;
 
 // Middleware
@@ -73,7 +74,7 @@ function createBot(username) {
   if (botInstance) return;
 
   config = loadConfig();
-  
+
   config["bot-account"].username = username; // Salvar nome temporário
   saveConfig(config);
 
@@ -114,24 +115,35 @@ function createBot(username) {
   botInstance.on("kicked", (reason) => {
     console.log(`[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
     io.emit("log", `[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
+
     resetBotName(); // Resetar nome quando for expulso
+    io.emit("clearBotName"); // Emitir para o frontend limpar o campo
   });
 
   botInstance.on("end", () => {
     console.log("[AfkBot] Conexão perdida");
     io.emit("log", "[AfkBot] Conexão perdida");
-    resetBotName(); // Resetar nome quando cair
 
-    botInstance = null;
-    if (
-      config.utils["auto-reconnect"] &&
-      reconnectAttempts < maxReconnectAttempts
-    ) {
-      reconnectAttempts++;
-      setTimeout(
-        () => createBot(username),
-        config.utils["auto-reconnect-delay"]
+    if (!isManuallyStopped) {
+      resetBotName(); // Resetar nome se não foi parado manualmente
+      io.emit("clearBotName"); // Emitir para o frontend limpar o campo
+
+      botInstance = null;
+      if (
+        config.utils["auto-reconnect"] &&
+        reconnectAttempts < maxReconnectAttempts
+      ) {
+        reconnectAttempts++;
+        setTimeout(
+          () => createBot(config["bot-account"].username),
+          config.utils["auto-reconnect-delay"]
+        );
+      }
+    } else {
+      console.log(
+        "[AfkBot] Reconexão desabilitada, bot foi parado manualmente."
       );
+      isManuallyStopped = false; // Resetar a variável após verificar
     }
   });
 
@@ -151,6 +163,7 @@ function createBot(username) {
     }
 
     resetBotName(); // Resetar nome quando ocorrer erro
+    io.emit("clearBotName");  // Emitir para o frontend limpar o campo
   });
 }
 
@@ -159,7 +172,9 @@ function resetBotName() {
   config = loadConfig();
   config["bot-account"].username = "";
   saveConfig(config);
-  io.emit("nomeBotReset"); // Avisar frontend que o nome foi resetado
+
+  // Emitir o evento para o frontend limpar o campo de nome
+  io.emit("clearBotName");
 }
 
 // WebSocket
@@ -187,7 +202,12 @@ io.on("connection", (socket) => {
     // Enviar confirmação para o cliente
     socket.emit("nomeBotSet", nomeBot);
     socket.emit("log", `[AfkBot] Nome do bot definido para: ${nomeBot}`);
-    showToast("Configurações salvas com sucesso!", "green");
+
+    // Emitir evento para o frontend exibir o toast
+    io.emit("showToast", {
+      message: "Configurações salvas com sucesso!",
+      color: "green",
+    });
   });
 
   socket.on("startBot", () => {
@@ -213,6 +233,8 @@ io.on("connection", (socket) => {
       socket.emit("log", "[AfkBot] Bot parado!");
       io.emit("botStopped");
       resetBotName(); // Resetar nome ao parar o bot
+      io.emit("clearBotName");  // Emitir para o frontend limpar o campo
+      isManuallyStopped = true; // Marcar como parado manualmente
     }
   });
 
@@ -232,6 +254,7 @@ app.post("/stop-bot", (req, res) => {
     botInstance = null;
     console.log("Bot parado.");
     resetBotName(); // Resetar nome ao parar via API
+    io.emit("clearBotName");  // Emitir para o frontend limpar o campo
     res.json({ success: true, message: "Bot parado com sucesso." });
   } else {
     res.json({ success: false, message: "Nenhum bot rodando." });

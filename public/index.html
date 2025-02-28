@@ -80,6 +80,11 @@
     const socket = io();
     const toastContainer = document.getElementById("toastContainer");
 
+    socket.on("clearBotName", () => {
+      // Limpar o campo de nome do bot no frontend
+      document.getElementById("botNameInput").value = "";
+    });
+
     // Função para mostrar Toasts
     function showToast(message, color) {
       const toast = document.createElement("div");
@@ -152,6 +157,11 @@
     socket.on("botStarted", () => showToast("Bot iniciado!", "green"));
     socket.on("botStopped", () => showToast("Bot parado!", "red"));
     socket.on("botError", () => showToast("Ocorreu um erro com o bot.", "yellow"));
+
+    // Escutando o evento de toast enviado pelo backend
+    socket.on("showToast", (data) => {
+      showToast(data.message, data.color);  // Exibe o toast com a mensagem e cor
+    });
   </script>
 
 </body>
