@@ -50,7 +50,7 @@ app.get("/getConfig", (req, res) => {
 // Rota para salvar configurações
 app.post("/saveConfig", (req, res) => {
   const { username, serverIP, serverPort } = req.body;
-  console.log(`Salvando nome do bot: ${username}`);
+  logMessage(`Salvando nome do bot: ${username}`);
 
   config["bot-account"].username = username;
   config.server.ip = serverIP;
@@ -90,8 +90,8 @@ function createBot(username) {
   botInstance.loadPlugin(pathfinder);
 
   botInstance.once("spawn", () => {
-    console.log(`[AfkBot] Bot conectado como: ${username}`);
-    io.emit("log", `[AfkBot] Bot conectado como: ${username}`);
+    const message = `[AfkBot] Bot conectado como: ${username}`;
+    logMessage(message);
     io.emit("botStarted");
 
     reconnectAttempts = 0;
@@ -102,27 +102,27 @@ function createBot(username) {
 
   botInstance.on("goal_reached", () => {
     const position = botInstance.entity.position;
-    console.log(`[AfkBot] Bot chegou ao destino. Posição: ${position}`);
-    io.emit("log", `[AfkBot] Bot chegou ao destino. Posição: ${position}`);
+    const message = `[AfkBot] Bot chegou ao destino. Posição: ${position}`;
+    logMessage(message);
   });
 
   botInstance.on("death", () => {
     const position = botInstance.entity.position;
-    console.log(`[AfkBot] Bot morreu e foi respawnado em ${position}`);
-    io.emit("log", `[AfkBot] Bot morreu e foi respawnado em ${position}`);
+    const message = `[AfkBot] Bot morreu e foi respawnado em ${position}`;
+    logMessage(message);
   });
 
   botInstance.on("kicked", (reason) => {
-    console.log(`[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
-    io.emit("log", `[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`);
+    const message = `[AfkBot] Bot foi expulso do servidor. Motivo: ${reason}`;
+    logMessage(message);
 
     resetBotName(); // Resetar nome quando for expulso
     io.emit("clearBotName"); // Emitir para o frontend limpar o campo
   });
 
   botInstance.on("end", () => {
-    console.log("[AfkBot] Conexão perdida");
-    io.emit("log", "[AfkBot] Conexão perdida");
+    const message = "[AfkBot] Conexão perdida";
+    logMessage(message);
 
     if (!isManuallyStopped) {
       resetBotName(); // Resetar nome se não foi parado manualmente
@@ -140,30 +140,26 @@ function createBot(username) {
         );
       }
     } else {
-      console.log(
-        "[AfkBot] Reconexão desabilitada, bot foi parado manualmente."
-      );
+      const manualStopMessage =
+        "[AfkBot] Reconexão desabilitada, bot foi parado manualmente.";
+      logMessage(manualStopMessage);
       isManuallyStopped = false; // Resetar a variável após verificar
     }
   });
 
   botInstance.on("error", (err) => {
-    console.log(`[ERROR] ${err.message}`);
-    io.emit("log", `[ERROR] ${err.message}`);
+    const errorMessage = `[ERROR] ${err.message}`;
+    logMessage(errorMessage);
     io.emit("botError");
 
     if (err.code === "ECONNREFUSED") {
-      console.log(
-        "[ERROR] Conexão recusada. Verifique o IP e a porta do servidor."
-      );
-      io.emit(
-        "log",
-        "[ERROR] Conexão recusada. Verifique o IP e a porta do servidor."
-      );
+      const connectionRefusedMessage =
+        "[ERROR] Conexão recusada. Verifique o IP e a porta do servidor.";
+      logMessage(connectionRefusedMessage);
     }
 
     resetBotName(); // Resetar nome quando ocorrer erro
-    io.emit("clearBotName");  // Emitir para o frontend limpar o campo
+    io.emit("clearBotName"); // Emitir para o frontend limpar o campo
   });
 }
 
@@ -177,9 +173,15 @@ function resetBotName() {
   io.emit("clearBotName");
 }
 
+// Função para logar mensagens tanto no console quanto no socket.io
+function logMessage(message) {
+  console.log(message); // Exibe no console
+  io.emit("log", message); // Exibe no frontend via WebSocket
+}
+
 // WebSocket
 io.on("connection", (socket) => {
-  console.log("Cliente conectado");
+  logMessage("Cliente conectado");
 
   socket.on("setNomeBot", (data) => {
     const { nomeBot, serverIP, serverPort } = data;
@@ -201,7 +203,8 @@ io.on("connection", (socket) => {
 
     // Enviar confirmação para o cliente
     socket.emit("nomeBotSet", nomeBot);
-    socket.emit("log", `[AfkBot] Nome do bot definido para: ${nomeBot}`);
+    const logMessageText = `[AfkBot] Nome do bot definido para: ${nomeBot}`;
+    socket.emit("log", logMessageText);
 
     // Emitir evento para o frontend exibir o toast
     io.emit("showToast", {
@@ -219,10 +222,8 @@ io.on("connection", (socket) => {
 
     if (!botInstance) {
       createBot(config["bot-account"].username);
-      socket.emit(
-        "log",
-        `[AfkBot] Bot iniciado com o nome: ${config["bot-account"].username}`
-      );
+      const startMessage = `[AfkBot] Bot iniciado com o nome: ${config["bot-account"].username}`;
+      socket.emit("log", startMessage);
     }
   });
 
@@ -233,18 +234,18 @@ io.on("connection", (socket) => {
       socket.emit("log", "[AfkBot] Bot parado!");
       io.emit("botStopped");
       resetBotName(); // Resetar nome ao parar o bot
-      io.emit("clearBotName");  // Emitir para o frontend limpar o campo
+      io.emit("clearBotName"); // Emitir para o frontend limpar o campo
       isManuallyStopped = true; // Marcar como parado manualmente
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("Cliente desconectado");
+    logMessage("Cliente desconectado");
   });
 });
 
 server.listen(8000, () => {
-  console.log("Servidor iniciado na porta 8000");
+  logMessage("Servidor iniciado na porta 8000");
 });
 
 // Rota para parar o bot
@@ -252,9 +253,9 @@ app.post("/stop-bot", (req, res) => {
   if (botInstance) {
     botInstance.quit();
     botInstance = null;
-    console.log("Bot parado.");
+    logMessage("Bot parado.");
     resetBotName(); // Resetar nome ao parar via API
-    io.emit("clearBotName");  // Emitir para o frontend limpar o campo
+    io.emit("clearBotName"); // Emitir para o frontend limpar o campo
     res.json({ success: true, message: "Bot parado com sucesso." });
   } else {
     res.json({ success: false, message: "Nenhum bot rodando." });
